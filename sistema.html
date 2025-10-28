@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Sistema de Gestão do Batizado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#6366f1',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+        }
+        .btn-primary {
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            border-radius: 0.5rem;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+        }
+        .modal-container {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .spinner-border {
+            border: 4px solid rgba(0,0,0,0.1);
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="min-h-screen flex flex-col items-center p-4">
+
+        <section id="loading-view" class="w-full max-w-md bg-white p-8 rounded-xl shadow-2xl border border-gray-100 mt-20 text-center">
+            <h2 class="text-2xl font-bold text-primary mb-4">Carregando Sistema...</h2>
+            <div class="spinner-border mx-auto mt-4"></div>
+        </section>
+
+        <section id="auth-view" class="w-full max-w-md bg-white p-8 rounded-xl shadow-2xl border border-gray-100 mt-20 hidden">
+            <h2 class="text-3xl font-bold text-center text-primary mb-6" id="auth-title">Acessar Sistema</h2>
+            <form id="auth-form" class="space-y-4">
+                <div id="name-field" class="hidden">
+                    <label for="auth-name" class="block text-sm font-medium text-gray-700">Nome</label>
+                    <input type="text" id="auth-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                </div>
+                <div>
+                    <label for="auth-email" class="block text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
+                    <input type="email" id="auth-email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label for="auth-password" class="block text-sm font-medium text-gray-700">Senha <span class="text-red-500">*</span></label>
+                    <input type="password" id="auth-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50" required>
+                </div>
+                <button type="submit" id="auth-button" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary btn-primary">
+                    Entrar
+                </button>
+                <div id="auth-message" class="mt-4 p-3 rounded-md hidden text-center"></div>
+            </form>
+            <div class="mt-6 text-center">
+                <button id="switch-auth-btn" onclick="switchAuthMode()" class="text-sm text-primary hover:text-secondary font-medium">Não tem conta? Crie uma!</button>
+            </div>
+        </section>
+
+        <div id="main-app-content" class="hidden w-full max-w-4xl flex flex-col items-center">
+            <header class="w-full bg-white shadow-lg rounded-xl p-4 mb-6">
+                <h1 class="text-3xl font-bold text-center text-primary">Sistema de Gestão do Batizado</h1>
+                <p id="auth-status" class="text-center text-sm mt-2 text-gray-600">Aguardando autenticação...</p>
+                <nav class="flex justify-center space-x-4 mt-4">
+                    <button id="btn-register" onclick="switchView('register-view')" class="px-6 py-2 rounded-lg bg-gray-200 text-gray-800 font-medium btn-primary hover:bg-gray-300" disabled>Registrar Batizado</button>
+                    <button id="btn-query" onclick="switchView('query-view')" class="px-6 py-2 rounded-lg bg-primary text-white font-medium btn-primary hover:bg-secondary">Consultar Batizado</button>
+                    <button onclick="logout()" class="px-6 py-2 rounded-lg bg-red-500 text-white font-medium btn-primary hover:bg-red-600">Sair</button>
+                </nav>
+            </header>
+
+            <main class="w-full max-w-4xl">
+                <section id="query-view" class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-2xl font-semibold mb-6 text-primary border-b pb-2">Consultar Batizado</h2>
+                    <div class="mb-6">
+                        <label for="search-term" class="block text-sm font-medium text-gray-700">Buscar por Nome, Código ou Pais</label>
+                        <input type="text" id="search-term" oninput="filterUsers(this.value)" placeholder="Digite o nome ou código para buscar..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                    </div>
+                    <div id="table-container" class="overflow-x-auto hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data do Batismo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registro (no Sistema)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-list-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <div id="status-message" class="mt-4 p-4 rounded-md text-center text-gray-600 bg-gray-50 border border-gray-200">
+                        Digite o nome ou código no campo acima para iniciar a consulta.
+                    </div>
+                    <div id="loading-message" class="mt-4 text-center text-gray-500 hidden">Carregando dados...</div>
+                    <p class="text-xs text-gray-400 mt-4">ID do Usuário Logado: <span id="user-id-display"></span></p>
+                </section>
+
+                <section id="register-view" class="hidden bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-2xl font-semibold mb-6 text-primary border-b pb-2">Registro de Batizado</h2>
+                    <form id="registration-form" class="space-y-4">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700">Nome Completo (Batizado) <span class="text-red-500">*</span></label>
+                            <input type="text" id="name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                        </div>
+                        <div>
+                            <label for="code" class="block text-sm font-medium text-gray-700">Código do Livro (ID) <span class="text-red-500">*</span></label>
+                            <input type="text" id="code" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                        </div>
+                        <div>
+                            <label for="batismDate" class="block text-sm font-medium text-gray-700">Data do Batismo <span class="text-red-500">*</span></label>
+                            <input type="date" id="batismDate" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="motherName" class="block text-sm font-medium text-gray-700">Nome da Mãe (Opcional)</label>
+                                <input type="text" id="motherName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                            </div>
+                            <div>
+                                <label for="fatherName" class="block text-sm font-medium text-gray-700">Nome do Pai (Opcional)</label>
+                                <input type="text" id="fatherName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                            </div>
+                        </div>
+                        <button type="submit" id="register-button" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary btn-primary">Registrar</button>
+                        <div id="register-message" class="mt-4 p-3 rounded-md hidden"></div>
+                    </form>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <div id="user-details-modal" class="modal-container fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 invisible opacity-0" onclick="closeModal(event)">
+        <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-4 text-primary border-b pb-2">Detalhes do Batizado: <span id="modal-user-name" class="font-semibold text-gray-700"></span></h3>
+            <div id="modal-details-body" class="space-y-3 text-gray-700">
+                <p><strong>Código do Livro:</strong> <span id="modal-user-code"></span></p>
+                <p><strong>Data do Batismo:</strong> <span id="modal-batism-date" class="font-normal"></span></p>
+                <p><strong>Nome da Mãe:</strong> <span id="modal-user-mother"></span></p>
+                <p><strong>Nome do Pai:</strong> <span id="modal-user-father"></span></p>
+                <p class="text-sm pt-2 border-t mt-3"><strong>Registrado no Sistema em:</strong> <span id="modal-registration-date" class="font-normal"></span></p>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeModal()" class="px-6 py-2 rounded-lg bg-gray-200 text-gray-800 font-medium hover:bg-gray-300">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        setLogLevel('debug');
+
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let allUsers = [];
+        let isLoginMode = true;
+        let unsubscribe = null;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBw6_cG2xNlIc5JlJ779c74UHE2fX5AqXs",
+            authDomain: "sistemabase-7af3c.firebaseapp.com",
+            projectId: "sistemabase-7af3c",
+            storageBucket: "sistemabase-7af3c.firebasestorage.app",
+            messagingSenderId: "209549420959",
+            appId: "1:209549420959:web:bda8c95027abbe5fe335aa",
+            measurementId: "G-Q4ZX0R9DX7"
+        };
+
+        // Inicialização única e segura
+        if (!app) {
+            app = initializeApp(firebaseConfig);
+        }
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        const PUBLIC_COLLECTION_NAME = 'baptisms_records';
+
+        const displayMessage = (elementId, message, isError = false) => {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-yellow-100', 'text-yellow-700');
+            el.textContent = message || '';
+            if (message) {
+                el.classList.remove('hidden');
+                if (isError === true) {
+                    el.classList.add('bg-red-100', 'text-red-700');
+                } else if (isError === 'warning') {
+                    el.classList.add('bg-yellow-100', 'text-yellow-700');
+                } else {
+                    el.classList.add('bg-green-100', 'text-green-700');
+                }
+            } else {
+                el.classList.add('hidden');
+            }
+        };
+
+        window.switchAuthMode = (setLogin = false) => {
+            isLoginMode = setLogin ? true : !isLoginMode;
+            const titleEl = document.getElementById('auth-title');
+            const buttonEl = document.getElementById('auth-button');
+            const switchBtn = document.getElementById('switch-auth-btn');
+            const nameField = document.getElementById('name-field');
+
+            if (isLoginMode) {
+                titleEl.textContent = 'Acessar Sistema';
+                buttonEl.textContent = 'Entrar';
+                switchBtn.textContent = 'Não tem conta? Crie uma!';
+                nameField.classList.add('hidden');
+                document.getElementById('auth-name').required = false;
+            } else {
+                titleEl.textContent = 'Criar Conta';
+                buttonEl.textContent = 'Cadastrar';
+                switchBtn.textContent = 'Já tem conta? Fazer Login.';
+                nameField.classList.remove('hidden');
+                document.getElementById('auth-name').required = true;
+            }
+            displayMessage('auth-message', '', false);
+        };
+
+        document.getElementById('auth-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const name = document.getElementById('auth-name').value;
+            const buttonEl = document.getElementById('auth-button');
+
+            buttonEl.disabled = true;
+            displayMessage('auth-message', 'Processando...');
+
+            try {
+                if (isLoginMode) {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } else {
+                    if (!name) {
+                        displayMessage('auth-message', 'Erro: O campo Nome é obrigatório para o cadastro.', true);
+                        return;
+                    }
+                    if (password.length < 6) {
+                        displayMessage('auth-message', 'Erro: A senha deve ter no mínimo 6 caracteres. Tente novamente.', true);
+                        return;
+                    }
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, { displayName: name });
+                    displayMessage('auth-message', 'Conta criada com sucesso! Você está logado.', false);
+                }
+            } catch (error) {
+                let errorMessage = 'Erro de autenticação.';
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    errorMessage = 'Email ou senha inválidos.';
+                } else if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = 'Este email já está cadastrado.';
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = 'Senha muito fraca. Deve ter pelo menos 6 caracteres.';
+                } else if (error.code === 'auth/operation-not-allowed') {
+                    errorMessage = 'Falha no Cadastro/Login: O provedor "Email/Senha" precisa ser ativado no console do Firebase. Você será logado anonimamente para consulta (somente leitura).';
+                    console.error("ERRO DE CONFIGURAÇÃO: Email/Senha não habilitado.", error);
+                } else {
+                    console.error("Erro de autenticação:", error);
+                    errorMessage = `Erro desconhecido: ${error.message}`;
+                }
+                displayMessage('auth-message', errorMessage, true);
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth).catch(e => console.error("Falha ao retornar para a sessão anônima:", e));
+                }
+            } finally {
+                buttonEl.disabled = false;
+                buttonEl.textContent = isLoginMode ? 'Entrar' : 'Cadastrar';
+            }
+        });
+
+        window.logout = async () => {
+            await signOut(auth);
+            await signInAnonymously(auth).catch(e => console.error("Falha ao entrar anonimamente após logout:", e));
+        };
+
+        async function initializeFirebase() {
+            try {
+                // Se já houver app inicializado, garante instâncias de auth/db
+                if (!app) {
+                    const envConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                    const finalConfig = Object.keys(envConfig).length ? envConfig : firebaseConfig;
+                    app = initializeApp(finalConfig);
+                }
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) {
+                    await signInWithCustomToken(auth, token).catch(async e => {
+                        console.warn("Falha no login com token personalizado. Tentando anônimo.", e);
+                        await signInAnonymously(auth).catch(e => console.error("Falha ao entrar anonimamente:", e));
+                    });
+                } else {
+                    await signInAnonymously(auth).catch(e => console.error("Falha no login anônimo:", e));
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    document.getElementById('loading-view').classList.add('hidden');
+
+                    if (unsubscribe) {
+                        unsubscribe();
+                        unsubscribe = null;
+                    }
+
+                    if (user && !user.isAnonymous) {
+                        userId = user.uid;
+                        const userName = user.displayName || user.email || 'Usuário Admin';
+                        document.getElementById('auth-view').classList.add('hidden');
+                        document.getElementById('main-app-content').classList.remove('hidden');
+                        document.getElementById('btn-register').disabled = false;
+                        document.getElementById('auth-status').textContent = `Logado como: ${userName} (UID: ${userId})`;
+                        document.getElementById('user-id-display').textContent = userId;
+                        unsubscribe = setupFirestoreListener();
+                    } else {
+                        userId = user ? user.uid : null;
+                        document.getElementById('main-app-content').classList.add('hidden');
+                        document.getElementById('auth-view').classList.remove('hidden');
+                        document.getElementById('btn-register').disabled = true;
+                        const statusText = user && user.isAnonymous ? 'Você está como Anônimo (somente consulta).' : 'Desconectado. Faça login.';
+                        document.getElementById('auth-status').textContent = statusText;
+                        document.getElementById('user-id-display').textContent = userId || 'N/A';
+                        if (user && user.isAnonymous) {
+                            displayMessage('auth-message', 'Você está logado anonimamente. Para registrar (escrita), use uma conta de Email/Senha ou autenticação completa.', 'warning');
+                        } else {
+                            displayMessage('auth-message', '', false);
+                        }
+                        renderUserList([], document.getElementById('search-term').value);
+                    }
+                });
+            } catch (error) {
+                console.error("Erro na inicialização do Firebase:", error);
+                document.getElementById('loading-view').classList.add('hidden');
+                document.getElementById('auth-view').classList.remove('hidden');
+                displayMessage('auth-message', 'Erro fatal ao conectar: Verifique sua configuração. (Veja o console)', true);
+            }
+        }
+
+        document.getElementById('registration-form').addEventListener('submit', handleRegistration);
+
+        async function handleRegistration(e) {
+            e.preventDefault();
+            if (!auth.currentUser || auth.currentUser.isAnonymous) {
+                displayMessage('register-message', 'Erro: Você deve fazer login (não-anônimo) para registrar um batizado.', true);
+                return;
+            }
+
+            const registerButton = document.getElementById('register-button');
+            registerButton.disabled = true;
+            registerButton.textContent = 'Registrando...';
+            displayMessage('register-message', 'Processando registro...');
+
+            const name = document.getElementById('name').value.trim();
+            const code = document.getElementById('code').value.trim();
+            const batismDate = document.getElementById('batismDate').value;
+            const motherName = document.getElementById('motherName').value.trim();
+            const fatherName = document.getElementById('fatherName').value.trim();
+
+            if (!db || !name || !code || !batismDate) {
+                displayMessage('register-message', 'Erro: Preencha Nome, Código e Data do Batismo, que são campos obrigatórios (*).', true);
+                registerButton.disabled = false;
+                registerButton.textContent = 'Registrar';
+                return;
+            }
+
+            const docId = code;
+            const userData = {
+                name: name,
+                code: code,
+                batismDate: batismDate,
+                motherName: motherName || null,
+                fatherName: fatherName || null,
+                registrationDate: serverTimestamp(),
+                registeredBy: auth.currentUser.uid
+            };
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', PUBLIC_COLLECTION_NAME, docId);
+
+            try {
+                await setDoc(userDocRef, userData);
+                displayMessage('register-message', `Batizado "${name}" registrado (ou atualizado) com sucesso! Código: ${code}`, false);
+                document.getElementById('registration-form').reset();
+            } catch (error) {
+                console.error("Erro ao registrar batizado:", error);
+                displayMessage('register-message', `Falha no registro: ${error.message}`, true);
+            } finally {
+                registerButton.disabled = false;
+                registerButton.textContent = 'Registrar';
+                if (document.getElementById('register-message').classList.contains('bg-green-100')) {
+                    setTimeout(() => displayMessage('register-message', '', false), 5000);
+                }
+            }
+        }
+
+        function setupFirestoreListener() {
+            if (!db) return;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const usersCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', PUBLIC_COLLECTION_NAME);
+            const q = query(usersCollectionRef);
+
+            document.getElementById('loading-message').classList.remove('hidden');
+            document.getElementById('status-message').classList.add('hidden');
+
+            return onSnapshot(q, (snapshot) => {
+                allUsers = [];
+                snapshot.forEach((docSnap) => {
+                    allUsers.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                allUsers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                document.getElementById('loading-message').classList.add('hidden');
+                const searchTerm = document.getElementById('search-term').value;
+                filterUsers(searchTerm);
+                console.log(`Dados de ${allUsers.length} batizados carregados/atualizados.`);
+            }, (error) => {
+                console.error("Erro CRÍTICO ao ouvir snapshot:", error);
+                document.getElementById('loading-message').textContent = 'ERRO CRÍTICO: Não foi possível carregar os dados. Verifique as regras de segurança do Firestore.';
+            });
+        }
+
+        window.filterUsers = (searchTerm) => {
+            const term = (searchTerm || '').toLowerCase().trim();
+            let filtered = [];
+            if (!auth.currentUser || auth.currentUser.isAnonymous) {
+                renderUserList([], term);
+                return;
+            }
+            if (term !== '') {
+                filtered = allUsers.filter(user =>
+                    (user.name && user.name.toLowerCase().includes(term)) ||
+                    (user.code && user.code.toLowerCase().includes(term)) ||
+                    (user.motherName && user.motherName.toLowerCase().includes(term)) ||
+                    (user.fatherName && user.fatherName.toLowerCase().includes(term))
+                );
+            }
+            renderUserList(filtered, term);
+        };
+
+        function renderUserList(users, searchTerm) {
+            const tbody = document.getElementById('user-list-body');
+            const statusMessage = document.getElementById('status-message');
+            const tableContainer = document.getElementById('table-container');
+
+            tbody.innerHTML = '';
+            statusMessage.classList.add('hidden');
+            tableContainer.classList.add('hidden');
+
+            const isAuthorized = auth.currentUser && !auth.currentUser.isAnonymous;
+
+            if (!isAuthorized) {
+                statusMessage.classList.remove('hidden');
+                statusMessage.textContent = 'A consulta requer um usuário autenticado (admin). Por favor, faça login completo.';
+                return;
+            }
+
+            if (searchTerm === '') {
+                statusMessage.classList.remove('hidden');
+                statusMessage.textContent = 'Digite o nome ou código no campo acima para iniciar a consulta.';
+                return;
+            }
+
+            if (users.length === 0) {
+                statusMessage.classList.remove('hidden');
+                statusMessage.textContent = `Nenhum batizado encontrado com o termo "${searchTerm}".`;
+                return;
+            }
+
+            tableContainer.classList.remove('hidden');
+            users.forEach(user => {
+                const regDate = user.registrationDate && user.registrationDate.seconds ? new Date(user.registrationDate.seconds * 1000).toLocaleDateString('pt-BR') : 'N/A';
+                const batismDate = user.batismDate ? new Date(user.batismDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A';
+                const row = `
+                    <tr class="hover:bg-gray-100 cursor-pointer transition duration-150 ease-in-out" onclick="showUserDetails('${user.code}')">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.code || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.name || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${batismDate}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${regDate}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        window.showUserDetails = (userCode) => {
+            const user = allUsers.find(u => u.code === userCode);
+            if (!user) {
+                console.error("Batizado não encontrado para o código:", userCode);
+                return;
+            }
+            const modal = document.getElementById('user-details-modal');
+            const regDate = user.registrationDate && user.registrationDate.seconds ? new Date(user.registrationDate.seconds * 1000).toLocaleString('pt-BR') : 'Não Informado';
+            const batismDateDisplay = user.batismDate ? new Date(user.batismDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não Informado';
+            const clean = (value) => value && value.trim() !== '' ? value : 'Não Informado';
+            document.getElementById('modal-user-name').textContent = clean(user.name);
+            document.getElementById('modal-user-code').textContent = clean(user.code);
+            document.getElementById('modal-batism-date').textContent = batismDateDisplay;
+            document.getElementById('modal-user-mother').textContent = clean(user.motherName);
+            document.getElementById('modal-user-father').textContent = clean(user.fatherName);
+            document.getElementById('modal-registration-date').textContent = regDate;
+            modal.classList.remove('invisible', 'opacity-0');
+            modal.classList.add('visible', 'opacity-100');
+            document.getElementById('modal-content').classList.remove('scale-95');
+            document.getElementById('modal-content').classList.add('scale-100');
+        };
+
+        window.closeModal = (event) => {
+            const modal = document.getElementById('user-details-modal');
+            if (event && event.target.id !== 'user-details-modal') return;
+            modal.classList.remove('visible', 'opacity-100');
+            modal.classList.add('invisible', 'opacity-0');
+            document.getElementById('modal-content').classList.remove('scale-100');
+            document.getElementById('modal-content').classList.add('scale-95');
+        };
+
+        window.switchView = (viewId) => {
+            document.getElementById('register-view').classList.add('hidden');
+            document.getElementById('query-view').classList.add('hidden');
+            document.getElementById(viewId).classList.remove('hidden');
+
+            const registerBtn = document.getElementById('btn-register');
+            const queryBtn = document.getElementById('btn-query');
+            const primaryClasses = ['bg-primary', 'text-white'];
+            const secondaryClasses = ['bg-gray-200', 'text-gray-800'];
+
+            if (viewId === 'register-view') {
+                registerBtn.classList.add(...primaryClasses);
+                registerBtn.classList.remove(...secondaryClasses);
+                queryBtn.classList.remove(...primaryClasses);
+                queryBtn.classList.add(...secondaryClasses);
+            } else {
+                queryBtn.classList.add(...primaryClasses);
+                queryBtn.classList.remove(...secondaryClasses);
+                registerBtn.classList.remove(...primaryClasses);
+                registerBtn.classList.add(...secondaryClasses);
+                filterUsers(document.getElementById('search-term').value);
+            }
+        };
+
+        window.onload = () => {
+            initializeFirebase();
+            switchAuthMode(true);
+            switchView('query-view');
+        };
+    </script>
+</body>
+</html>
